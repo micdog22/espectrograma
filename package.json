@@ -1,0 +1,16 @@
+{
+  "name": "espectrograma",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Espectrograma em tempo real do microfone ou de arquivos, com FFT feita do zero, janelas, pico interpolado e afinador YIN.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/micdog22/espectrograma.git"
+  },
+  "homepage": "https://micdog22.github.io/espectrograma/"
+}

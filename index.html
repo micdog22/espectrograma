@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Espectrograma: veja o som em tempo real</title>
+  <meta name="description" content="Espectrograma em tempo real do microfone ou de um arquivo de áudio, com FFT feita do zero, janelas, escala log, pico com interpolação e detector de notas YIN.">
+  <meta name="theme-color" content="#0f766e">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./src/app.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <h1>Espectrograma</h1>
+    <p class="lead">Veja o som em tempo real: cada coluna é uma FFT, feita do zero, das últimas amostras do microfone ou de um arquivo.</p>
+  </header>
+
+  <main>
+    <section class="card entrada" aria-labelledby="t-entrada">
+      <h2 id="t-entrada">Entrada de áudio</h2>
+      <p class="privacidade"><strong>O áudio não sai do seu computador.</strong> A análise acontece toda aqui no navegador; nada é gravado ou enviado.</p>
+      <div class="botoes">
+        <button type="button" class="btn" id="microfone">Ativar microfone</button>
+        <label class="btn secundario arquivo" for="arquivo">Abrir arquivo de áudio</label>
+        <input type="file" id="arquivo" accept="audio/*" class="sr-only">
+        <button type="button" class="btn secundario" id="tom">Tom de teste</button>
+        <button type="button" class="btn secundario" id="varredura">Varredura de 50 Hz a 12 kHz</button>
+        <button type="button" class="btn secundario" id="parar" disabled>Parar</button>
+      </div>
+      <div class="linha tom-opcoes">
+        <label for="tom-freq">Frequência do tom: <output id="tom-freq-valor" for="tom-freq">440 Hz</output></label>
+        <input type="range" id="tom-freq" min="55" max="3520" step="1" value="440">
+        <label for="tom-forma">Forma de onda</label>
+        <select id="tom-forma">
+          <option value="sine">Senoide (só a fundamental)</option>
+          <option value="square">Quadrada (harmônicos ímpares)</option>
+          <option value="sawtooth">Dente de serra (todos os harmônicos)</option>
+          <option value="triangle">Triangular</option>
+        </select>
+      </div>
+      <div class="arquivo-controles" id="arquivo-controles" hidden>
+        <p class="arquivo-nome" id="arquivo-nome"></p>
+        <div class="botoes">
+          <button type="button" class="btn" id="tocar">Tocar</button>
+          <button type="button" class="btn secundario" id="completo">Espectrograma do arquivo inteiro</button>
+        </div>
+      </div>
+      <p class="status" id="status" role="status" aria-live="polite">Escolha uma entrada para começar.</p>
+    </section>
+
+    <section class="card visor" aria-labelledby="t-visor">
+      <div class="visor-topo">
+        <h2 id="t-visor">Espectrograma</h2>
+        <div class="botoes">
+          <button type="button" class="btn secundario pequeno" id="congelar" aria-pressed="false">Congelar</button>
+          <button type="button" class="btn secundario pequeno" id="limpar">Limpar</button>
+          <button type="button" class="btn secundario pequeno" id="exportar">Exportar PNG</button>
+        </div>
+      </div>
+      <div class="grafico">
+        <canvas id="eixo" aria-hidden="true"></canvas>
+        <div class="tela-moldura">
+          <canvas id="espectrograma" role="img" aria-label="Espectrograma: tempo na horizontal, frequência na vertical, intensidade na cor"></canvas>
+          <p class="modo" id="modo-visor" hidden></p>
+        </div>
+      </div>
+      <div class="eixo-tempo"><span id="tempo-esquerda"></span><span id="tempo-direita">agora</span></div>
+      <div class="legenda">
+        <span id="legenda-min"></span>
+        <div class="barra-cores" id="barra-cores" aria-hidden="true"></div>
+        <span id="legenda-max"></span>
+      </div>
+
+      <h3>Espectro do último quadro</h3>
+      <canvas id="espectro" role="img" aria-label="Espectro: frequência na horizontal, intensidade em decibéis na vertical"></canvas>
+
+      <div class="leituras" aria-live="polite" id="leituras">
+        <div class="leitura">
+          <span class="rotulo">Pico (interpolado)</span>
+          <span class="valor" id="pico">sem sinal</span>
+        </div>
+        <div class="leitura afinador">
+          <span class="rotulo">Nota (YIN)</span>
+          <span class="valor nota" id="nota">sem nota</span>
+          <span class="detalhe" id="nota-detalhe"></span>
+          <div class="medidor" aria-hidden="true"><div class="centro"></div><div class="agulha" id="agulha"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="paineis">
+      <section class="card" aria-labelledby="t-analise">
+        <h2 id="t-analise">Análise</h2>
+        <label for="tamanho">Tamanho da FFT (N)</label>
+        <select id="tamanho"></select>
+        <label for="sobreposicao">Sobreposição entre quadros</label>
+        <select id="sobreposicao">
+          <option value="0">0% (quadros lado a lado)</option>
+          <option value="0.5">50%</option>
+          <option value="0.75">75%</option>
+          <option value="0.875">87,5%</option>
+        </select>
+        <label for="janela">Janela</label>
+        <select id="janela"></select>
+        <dl class="resolucao" id="resolucao"></dl>
+      </section>
+
+      <section class="card" aria-labelledby="t-exibicao">
+        <h2 id="t-exibicao">Exibição</h2>
+        <label class="check"><input type="checkbox" id="escala-log" checked> Frequência em escala logarítmica</label>
+        <label for="db-min">Piso: <output id="db-min-valor" for="db-min"></output></label>
+        <input type="range" id="db-min" min="-140" max="-40" step="1" value="-100">
+        <label for="db-max">Teto: <output id="db-max-valor" for="db-max"></output></label>
+        <input type="range" id="db-max" min="-60" max="0" step="1" value="-20">
+        <label for="mapa">Mapa de cores</label>
+        <select id="mapa"></select>
+        <label for="la4">Lá4 de referência (Hz)</label>
+        <input type="number" id="la4" min="400" max="480" step="0.1" value="440" inputmode="decimal">
+        <p class="dica">Mudar o piso, o teto ou o mapa repinta todo o histórico na hora.</p>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>Tudo roda no seu navegador. <a href="https://github.com/micdog22/espectrograma">Código aberto no GitHub</a> · Licença MIT</p>
+  </footer>
+</body>
+</html>
